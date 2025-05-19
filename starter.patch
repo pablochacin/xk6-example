@@ -1,0 +1,891 @@
+diff --git a/base32.go b/base32.go
+deleted file mode 100644
+index 958b1fd..0000000
+--- a/base32.go
++++ /dev/null
+@@ -1,98 +0,0 @@
+-package example
+-
+-import (
+-	"encoding/base32"
+-	"errors"
+-	"fmt"
+-	"reflect"
+-
+-	"github.com/grafana/sobek"
+-)
+-
+-func (m *module) b32encode(input sobek.Value, encoding string) (any, error) {
+-	data, err := stringOrArrayBuffer(input, m.vu.Runtime())
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	enc, err := encodingFor(encoding)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	return m.vu.Runtime().ToValue(enc.EncodeToString(data)), nil
+-}
+-
+-func (m *module) b32decode(input string, encoding string, format string) (any, error) {
+-	rt := m.vu.Runtime()
+-
+-	enc, err := encodingFor(encoding)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	data, err := enc.DecodeString(input)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	if format == stringFormat {
+-		return rt.ToValue(string(data)).ToObject(rt), nil
+-	}
+-
+-	return rt.NewArrayBuffer(data), nil
+-}
+-
+-var (
+-	errInvalidEncoding = errors.New("invalid encoding")
+-	errInvalidType     = errors.New("invalid type")
+-)
+-
+-const (
+-	stdEncoding    = "std"
+-	stdrawEncoding = "stdraw"
+-	hexEncoding    = "hex"
+-	hexrawEncoding = "hexraw"
+-
+-	stringFormat = "s"
+-)
+-
+-func stringOrArrayBuffer(input sobek.Value, runtime *sobek.Runtime) ([]byte, error) {
+-	var data []byte
+-
+-	switch input.ExportType() {
+-	case reflect.TypeFor[string]():
+-		var str string
+-
+-		if err := runtime.ExportTo(input, &str); err != nil {
+-			return nil, err
+-		}
+-
+-		data = []byte(str)
+-
+-	case reflect.TypeFor[[]byte]():
+-		if err := runtime.ExportTo(input, &data); err != nil {
+-			return nil, err
+-		}
+-
+-	default:
+-		return nil, fmt.Errorf("%w: String or ArrayBuffer expected", errInvalidType)
+-	}
+-
+-	return data, nil
+-}
+-
+-func encodingFor(encoding string) (*base32.Encoding, error) {
+-	switch encoding {
+-	case stdEncoding, "":
+-		return base32.StdEncoding, nil
+-	case stdrawEncoding:
+-		return base32.StdEncoding.WithPadding(base32.NoPadding), nil
+-	case hexEncoding:
+-		return base32.HexEncoding, nil
+-	case hexrawEncoding:
+-		return base32.HexEncoding.WithPadding(base32.NoPadding), nil
+-	default:
+-		return nil, fmt.Errorf("%w: %s", errInvalidEncoding, encoding)
+-	}
+-}
+diff --git a/base32_test.go b/base32_test.go
+deleted file mode 100644
+index 161b771..0000000
+--- a/base32_test.go
++++ /dev/null
+@@ -1,185 +0,0 @@
+-package example
+-
+-import (
+-	"testing"
+-
+-	"github.com/grafana/sobek"
+-	"github.com/stretchr/testify/require"
+-	"go.k6.io/k6/js/modulestest"
+-)
+-
+-const (
+-	message = "The quick brown fox jumps over the lazy dog."
+-	std     = "KRUGKIDROVUWG2ZAMJZG653OEBTG66BANJ2W24DTEBXXMZLSEB2GQZJANRQXU6JAMRXWOLQ="
+-	stdraw  = "KRUGKIDROVUWG2ZAMJZG653OEBTG66BANJ2W24DTEBXXMZLSEB2GQZJANRQXU6JAMRXWOLQ"
+-	hex     = "AHK6A83HELKM6QP0C9P6UTRE41J6UU10D9QMQS3J41NNCPBI41Q6GP90DHGNKU90CHNMEBG="
+-	hexraw  = "AHK6A83HELKM6QP0C9P6UTRE41J6UU10D9QMQS3J41NNCPBI41Q6GP90DHGNKU90CHNMEBG"
+-)
+-
+-func Test_module_b32encode(t *testing.T) {
+-	t.Parallel()
+-
+-	tests := []struct {
+-		name     string
+-		input    string
+-		encoding string
+-		want     string
+-		wantErr  bool
+-	}{
+-		{name: "std", input: message, encoding: "std", want: std},
+-		{name: "stdraw", input: message, encoding: "stdraw", want: stdraw},
+-		{name: "hex", input: message, encoding: "hex", want: hex},
+-		{name: "hexraw", input: message, encoding: "hexraw", want: hexraw},
+-		{name: "invalid encoding", input: message, encoding: "invalid", wantErr: true},
+-	}
+-	for _, tt := range tests {
+-		t.Run(tt.name, func(t *testing.T) {
+-			t.Parallel()
+-
+-			mod := &module{vu: modulestest.NewRuntime(t).VU}
+-			toValue := mod.vu.Runtime().ToValue
+-
+-			got, err := mod.b32encode(toValue(tt.input), tt.encoding)
+-
+-			if tt.wantErr {
+-				require.Error(t, err)
+-
+-				return
+-			}
+-
+-			require.NoError(t, err)
+-
+-			value, ok := got.(sobek.Value)
+-			require.True(t, ok)
+-
+-			require.Equal(t, tt.want, value.String())
+-		})
+-	}
+-}
+-
+-func Test_module_b32encode_invalid_type(t *testing.T) {
+-	t.Parallel()
+-
+-	mod := &module{vu: modulestest.NewRuntime(t).VU}
+-
+-	_, err := mod.b32encode(mod.vu.Runtime().NewObject(), "std")
+-
+-	require.ErrorIs(t, err, errInvalidType)
+-}
+-
+-func Test_module_b32decode(t *testing.T) {
+-	t.Parallel()
+-
+-	tests := []struct {
+-		name     string
+-		input    string
+-		encoding string
+-		want     string
+-		wantErr  bool
+-	}{
+-		{name: "std", input: std, encoding: "std", want: message},
+-		{name: "stdraw", input: stdraw, encoding: "stdraw", want: message},
+-		{name: "hex", input: hex, encoding: "hex", want: message},
+-		{name: "hexraw", input: hexraw, encoding: "hexraw", want: message},
+-		{name: "invalid encoding", input: message, encoding: "invalid", wantErr: true},
+-		{name: "invalid input", input: "invalid!", encoding: "std", wantErr: true},
+-	}
+-	for _, tt := range tests {
+-		t.Run(tt.name, func(t *testing.T) {
+-			t.Parallel()
+-
+-			mod := &module{vu: modulestest.NewRuntime(t).VU}
+-
+-			got, err := mod.b32decode(tt.input, tt.encoding, "s")
+-
+-			if tt.wantErr {
+-				require.Error(t, err)
+-
+-				return
+-			}
+-
+-			require.NoError(t, err)
+-
+-			value, ok := got.(sobek.Value)
+-			require.True(t, ok)
+-			require.NotNil(t, value)
+-
+-			require.Equal(t, tt.want, value.String())
+-
+-			want := value.String()
+-
+-			got, err = mod.b32decode(tt.input, tt.encoding, "")
+-			require.NoError(t, err)
+-
+-			buff, ok := got.(sobek.ArrayBuffer)
+-			require.True(t, ok)
+-
+-			require.Equal(t, want, string(buff.Bytes()))
+-		})
+-	}
+-}
+-
+-func Test_encodingFor(t *testing.T) {
+-	t.Parallel()
+-
+-	tests := []struct {
+-		name     string
+-		encoding string
+-		want     string
+-		wantErr  bool
+-	}{
+-		{name: "std", encoding: "std", want: std},
+-		{name: "stdraw", encoding: "stdraw", want: stdraw},
+-		{name: "hex", encoding: "hex", want: hex},
+-		{name: "hexraw", encoding: "hexraw", want: hexraw},
+-	}
+-	for _, tt := range tests {
+-		t.Run(tt.name, func(t *testing.T) {
+-			t.Parallel()
+-
+-			got, err := encodingFor(tt.encoding)
+-
+-			if tt.wantErr {
+-				require.Error(t, err)
+-
+-				return
+-			}
+-
+-			require.NoError(t, err)
+-			require.Equal(t, tt.want, got.EncodeToString([]byte(message)))
+-		})
+-	}
+-}
+-
+-func Test_stringOrArrayBuffer(t *testing.T) {
+-	t.Parallel()
+-
+-	rt := sobek.New()
+-
+-	tests := []struct {
+-		name    string
+-		input   sobek.Value
+-		want    string
+-		wantErr bool
+-	}{
+-		{name: "string", input: rt.ToValue(message), want: message},
+-		{name: "ArrayBuffer", input: rt.ToValue([]byte(message)), want: message},
+-		{name: "invalid type", input: rt.NewObject(), wantErr: true},
+-	}
+-	for _, tt := range tests {
+-		t.Run(tt.name, func(t *testing.T) {
+-			t.Parallel()
+-
+-			got, err := stringOrArrayBuffer(tt.input, sobek.New())
+-
+-			if tt.wantErr {
+-				require.Error(t, err)
+-
+-				return
+-			}
+-
+-			require.NoError(t, err)
+-			require.Equal(t, []byte(tt.want), got)
+-		})
+-	}
+-}
+diff --git a/examples/base32.js b/examples/base32.js
+deleted file mode 100644
+index 88416bd..0000000
+--- a/examples/base32.js
++++ /dev/null
+@@ -1,5 +0,0 @@
+-import { b32encode } from "k6/x/example";
+-
+-export default function () {
+-  console.log(b32encode("Hello, World!"))
+-}
+diff --git a/examples/greeting.js b/examples/greeting.js
+deleted file mode 100644
+index 70650a8..0000000
+--- a/examples/greeting.js
++++ /dev/null
+@@ -1,6 +0,0 @@
+-import { greeting } from "k6/x/example";
+-
+-export default function () {
+-  console.log(greeting()) // Hello, World!
+-  console.log(greeting("Joe")) // Hello, Joe!
+-}
+diff --git a/examples/random.js b/examples/random.js
+deleted file mode 100644
+index 475a495..0000000
+--- a/examples/random.js
++++ /dev/null
+@@ -1,8 +0,0 @@
+-import { Random } from "k6/x/example";
+-
+-export default function () {
+-  const rnd = new Random(42)
+-
+-  console.log(rnd.int(2000))
+-  console.log(rnd.float())
+-}
+diff --git a/greeting.go b/greeting.go
+deleted file mode 100644
+index 7ce1259..0000000
+--- a/greeting.go
++++ /dev/null
+@@ -1,11 +0,0 @@
+-package example
+-
+-import "fmt"
+-
+-func (*module) greeting(name string) string {
+-	if name == "" {
+-		name = "World"
+-	}
+-
+-	return fmt.Sprintf("Hello, %s!", name)
+-}
+diff --git a/greeting_test.go b/greeting_test.go
+deleted file mode 100644
+index 887a06b..0000000
+--- a/greeting_test.go
++++ /dev/null
+@@ -1,29 +0,0 @@
+-package example
+-
+-import (
+-	"testing"
+-
+-	"github.com/stretchr/testify/require"
+-)
+-
+-func Test_module_greeting(t *testing.T) {
+-	t.Parallel()
+-
+-	mod := new(module)
+-
+-	tests := []struct {
+-		name string
+-		arg  string
+-		want string
+-	}{
+-		{name: "without arg", arg: "", want: "Hello, World!"},
+-		{name: "with arg", arg: "Joe", want: "Hello, Joe!"},
+-	}
+-	for _, tt := range tests {
+-		t.Run(tt.name, func(t *testing.T) {
+-			t.Parallel()
+-
+-			require.Equal(t, tt.want, mod.greeting(tt.arg))
+-		})
+-	}
+-}
+diff --git a/index.d.ts b/index.d.ts
+index e59c80c..cb9458c 100644
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -3,85 +3,6 @@
+  *
+  * @module example
+  */
+-export as namespace example;
+ 
+-/**
+- * Generate a personalized greeting message.
+- *
+- * @param name The name to be greeted (default "World")
+- */
+-export declare function greeting(name: string): string
+-
+-/**
+- * Encode the passed `input` string or ArrayBuffer object to base32 encoded string.
+- * Available options for encoding parameter are:
+- * - **std**: the standard encoding with `=` padding chars. This is the default.
+- * - **rawstd**: like **std** but without `=` padding characters
+- * - **hex**: the "Extended Hex Alphabet" encoding defined in RFC 4648. It is typically used in DNS.
+- * - **rawhex**: like **hex** but without `=` padding characters
+- *
+- * @param input The input string or ArrayBuffer object to base32 encode.
+- * @param encoding The base32 encoding to use.
+- */
+-export declare function b32encode(
+-  input: string | ArrayBuffer,
+-  encoding: string
+-): string;
+-
+-/**
+- * Decode the passed base32 encoded `input` string into the unencoded original input in either binary or string formats.
+- * Available options for encoding parameter are:
+- * - **std**: the standard encoding with `=` padding chars. This is the default.
+- * - **rawstd**: like **std** but without `=` padding characters
+- * - **hex**: the "Extended Hex Alphabet" encoding defined in RFC 4648. It is typically used in DNS.
+- * - **rawhex**: like **hex** but without `=` padding characters
+- *
+- * @param input The string to base64 decode.
+- * @param encoding The base32 encoding to use.
+- * @param format If "s" return the data as a string, otherwise if unspecified an ArrayBuffer object is returned.
+- */
+-export declare function b32decode(
+-  input: string,
+-  encoding?: string,
+-  format?: string
+-): string | ArrayBuffer;
+-
+-/**
+- * Pseudo random number generator.
+- */
+-export declare class Random {
+-  /**
+-   * Initial seed for the generator.
+-   * If it is changed, the generator will restart.
+-   */
+-  seed: number;
+-
+-  /**
+-   * Create a new Random instance.
+-   *
+-   * The seed parameter is optional, if missing a random initial seed will be used.
+-   *
+-   * @param seed Initial seed for the generator
+-   */
+-  constructor(seed?: Number);
+-
+-  /**
+-   * Generate a non-negative pseudo-random integer.
+-   *
+-   * The generated integer will be from the half-open interval [0,n).
+-   * If the optional parameter n is missing, `Number.MAX_SAFE_INTEGER` will be used instead.
+-   *
+-   * @param n The upper bound, `Number.MAX_SAFE_INTEGER` if missing.
+-   */
+-  int(n: number): number;
+-
+-  /**
+-   * Generate a non-negative pseudo-random float.
+-   *
+-   * The generated float will be from the half-open interval [0,n).
+-   * If the optional parameter n is missing, `1` will be used instead.
+-   *
+-   * @param n The upper bound, `1` if missing.
+-   */
+-  float(n: number): number;
+-}
++// Uncomment the following line after adding declarations
++// export as namespace example;
+diff --git a/module.go b/module.go
+index 58483cb..f0793ce 100644
+--- a/module.go
++++ b/module.go
+@@ -16,10 +16,8 @@ type module struct {
+ func (m *module) Exports() modules.Exports {
+ 	return modules.Exports{
+ 		Named: map[string]any{
+-			"greeting":  m.greeting,
+-			"b32encode": m.b32encode,
+-			"b32decode": m.b32decode,
+-			"Random":    m.random,
++			// put your exported symbols here
++			// "myFunc": m.myFunc,
+ 		},
+ 	}
+ }
+diff --git a/module_test.go b/module_test.go
+index a0f4f49..bc0839a 100644
+--- a/module_test.go
++++ b/module_test.go
+@@ -23,9 +23,8 @@ func Test_module(t *testing.T) { //nolint:tparallel
+ 		name  string
+ 		check string
+ 	}{
+-		{name: "greeting()", check: `mod.greeting("") == "Hello, World!"`},
+-		{name: "b32encode()", check: `mod.b32encode("Hello, World!") == "JBSWY3DPFQQFO33SNRSCC==="`},
+-		{name: "new Random()", check: `new mod.Random(11).seed == 11`},
++		// Add your test cases here
++		// Example: {name: "myFunc()", check: `mod.myFunc() == expectedValue`},
+ 	}
+ 	for _, tt := range tests { //nolint:paralleltest
+ 		t.Run(tt.name, func(t *testing.T) {
+diff --git a/random.go b/random.go
+deleted file mode 100644
+index 0e71527..0000000
+--- a/random.go
++++ /dev/null
+@@ -1,89 +0,0 @@
+-package example
+-
+-import (
+-	"math/rand"
+-
+-	"github.com/grafana/sobek"
+-)
+-
+-const maxSafeInteger int64 = 9007199254740991
+-
+-type random struct {
+-	seed int64
+-	rnd  *rand.Rand
+-}
+-
+-func newRandom(seed int64) *random {
+-	r := new(random)
+-
+-	r.seed = seed
+-	r.rnd = rand.New(rand.NewSource(seed)) // #nosec G115,G404
+-
+-	return r
+-}
+-
+-func (r *random) seedGetter() int64 {
+-	return r.seed
+-}
+-
+-func (r *random) seedSetter(seed int64) {
+-	r.rnd.Seed(seed)
+-	r.seed = seed
+-}
+-
+-func (r *random) intMethod(n sobek.Value) int64 {
+-	var m int64
+-
+-	if n == nil || sobek.IsNaN(n) || sobek.IsUndefined(n) {
+-		m = maxSafeInteger
+-	} else {
+-		m = min(maxSafeInteger, n.ToInteger())
+-	}
+-
+-	return r.rnd.Int63n(m)
+-}
+-
+-func (r *random) floatMethod(n sobek.Value) float64 {
+-	var m float64
+-
+-	if n == nil || sobek.IsNaN(n) || sobek.IsUndefined(n) {
+-		m = 1
+-	} else {
+-		m = n.ToFloat()
+-	}
+-
+-	return r.rnd.Float64() * m
+-}
+-
+-func (m *module) random(call sobek.ConstructorCall) *sobek.Object {
+-	var seed int64
+-
+-	if val := call.Argument(0); !sobek.IsNaN(val) && !sobek.IsUndefined(val) {
+-		seed = val.ToInteger()
+-	} else {
+-		seed = rand.Int63() // #nosec G404
+-	}
+-
+-	r := newRandom(seed)
+-
+-	this := call.This
+-	toValue := m.vu.Runtime().ToValue
+-	must := func(err error) {
+-		if err != nil {
+-			panic(err)
+-		}
+-	}
+-
+-	must(this.DefineAccessorProperty(
+-		"seed",
+-		toValue(r.seedGetter),
+-		toValue(r.seedSetter),
+-		sobek.FLAG_FALSE,
+-		sobek.FLAG_TRUE,
+-	))
+-
+-	must(this.Set("int", toValue(r.intMethod)))
+-	must(this.Set("float", toValue(r.floatMethod)))
+-
+-	return nil
+-}
+diff --git a/random_test.go b/random_test.go
+deleted file mode 100644
+index 4f0ac64..0000000
+--- a/random_test.go
++++ /dev/null
+@@ -1,94 +0,0 @@
+-package example
+-
+-import (
+-	"testing"
+-
+-	"github.com/grafana/sobek"
+-	"github.com/stretchr/testify/require"
+-	"go.k6.io/k6/js/modulestest"
+-)
+-
+-func Test_newRandom(t *testing.T) {
+-	t.Parallel()
+-
+-	r := newRandom(42)
+-
+-	require.Equal(t, int64(42), r.seed)
+-	require.NotNil(t, r.rnd)
+-	require.Equal(t, int64(675), r.rnd.Int63n(2000))
+-}
+-
+-func Test_random_seedGetter(t *testing.T) {
+-	t.Parallel()
+-
+-	r := newRandom(42)
+-
+-	require.Equal(t, int64(42), r.seedGetter())
+-
+-	r = newRandom(1)
+-
+-	require.Equal(t, int64(1), r.seedGetter())
+-}
+-
+-func Test_random_seedSetter(t *testing.T) {
+-	t.Parallel()
+-
+-	r := newRandom(1)
+-
+-	r.seedSetter(42)
+-
+-	require.Equal(t, int64(42), r.seedGetter())
+-	require.Equal(t, int64(675), r.rnd.Int63n(2000))
+-}
+-
+-func Test_random_intMethod(t *testing.T) {
+-	t.Parallel()
+-
+-	toValue := sobek.New().ToValue
+-
+-	r := newRandom(42)
+-
+-	require.Equal(t, int64(675), r.intMethod(toValue(2000)))
+-
+-	r.seedSetter(42)
+-	require.Equal(t, int64(8836438174961104), r.intMethod(nil))
+-
+-	r.seedSetter(42)
+-	require.Equal(t, int64(8836438174961104), r.intMethod(sobek.NaN()))
+-
+-	r.seedSetter(42)
+-	require.Equal(t, int64(8836438174961104), r.intMethod(sobek.Undefined()))
+-}
+-
+-func Test_random_floatMethod(t *testing.T) {
+-	t.Parallel()
+-
+-	toValue := sobek.New().ToValue
+-
+-	r := newRandom(42)
+-
+-	require.InEpsilon(t, float64(746), r.floatMethod(toValue(2000)), float64(1))
+-
+-	r.seedSetter(42)
+-	require.InEpsilon(t, float64(.37), r.floatMethod(nil), float64(.01))
+-
+-	r.seedSetter(42)
+-	require.InEpsilon(t, float64(.37), r.floatMethod(sobek.NaN()), float64(.01))
+-
+-	r.seedSetter(42)
+-	require.InEpsilon(t, float64(.37), r.floatMethod(sobek.Undefined()), float64(.01))
+-}
+-
+-func Test_module_random(t *testing.T) {
+-	t.Parallel()
+-
+-	mod := &module{vu: modulestest.NewRuntime(t).VU}
+-	rt := mod.vu.Runtime()
+-
+-	require.NoError(t, rt.Set("Random", mod.random))
+-
+-	val, err := rt.RunString("new Random(42).int(2000)")
+-
+-	require.NoError(t, err)
+-	require.Equal(t, int64(675), val.ToInteger())
+-}
+diff --git a/script.js b/script.js
+deleted file mode 100644
+index 70650a8..0000000
+--- a/script.js
++++ /dev/null
+@@ -1,6 +0,0 @@
+-import { greeting } from "k6/x/example";
+-
+-export default function () {
+-  console.log(greeting()) // Hello, World!
+-  console.log(greeting("Joe")) // Hello, Joe!
+-}
+diff --git a/test/base32.test.js b/test/base32.test.js
+deleted file mode 100644
+index f77923d..0000000
+--- a/test/base32.test.js
++++ /dev/null
+@@ -1,64 +0,0 @@
+-import { check } from "k6";
+-import { b32encode, b32decode } from "k6/x/example";
+-
+-export const options = {
+-  thresholds: {
+-    checks: ["rate==1"],
+-  },
+-};
+-
+-function toString(ab) {
+-  return Array.from(new Uint8Array(ab), (c) => String.fromCharCode(c)).join('')
+-}
+-
+-export default function () {
+-  const input = "The quick brown fox jumps over the lazy dog.";
+-  const std = "KRUGKIDROVUWG2ZAMJZG653OEBTG66BANJ2W24DTEBXXMZLSEB2GQZJANRQXU6JAMRXWOLQ="
+-  const stdraw = "KRUGKIDROVUWG2ZAMJZG653OEBTG66BANJ2W24DTEBXXMZLSEB2GQZJANRQXU6JAMRXWOLQ"
+-  const hex = "AHK6A83HELKM6QP0C9P6UTRE41J6UU10D9QMQS3J41NNCPBI41Q6GP90DHGNKU90CHNMEBG="
+-  const hexraw = "AHK6A83HELKM6QP0C9P6UTRE41J6UU10D9QMQS3J41NNCPBI41Q6GP90DHGNKU90CHNMEBG"
+-
+-  // b32encode
+-
+-  check(b32encode(input, "std"), {
+-    'b32encode(input, "std")': (str) => str == std,
+-  });
+-
+-  check(b32encode(input, "stdraw"), {
+-    'b32encode(input, "stdraw")': (str) => str == stdraw,
+-  });
+-
+-  check(b32encode(input, "hex"), {
+-    'b32encode(input, "hex")': (str) => str == hex,
+-  });
+-
+-  check(b32encode(input, "hexraw"), {
+-    'b32encode(input, "hexraw")': (str) => str == hexraw,
+-  });
+-
+-  // b32decode
+-
+-  check(toString(b32decode(std, "std")), {
+-    'b32decode(input, "std")': (str) => str == input,
+-  });
+-
+-  check(b32decode(std, "std", "s"), {
+-    'b32decode(input, "std", "s")': (str) => str == input,
+-  });
+-
+-  check(toString(b32decode(stdraw, "stdraw")), {
+-    'b32decode(input, "stdraw")': (str) => str == input,
+-  });
+-
+-  check(b32decode(stdraw, "stdraw", "s"), {
+-    'b32decode(input, "stdraw", "s")': (str) => str == input,
+-  });
+-
+-  check(toString(b32decode(hex, "hex")), {
+-    'b32decode(input, "hex")': (str) => str == input,
+-  });
+-
+-  check(b32decode(hexraw, "hexraw", "s"), {
+-    'b32decode(input, "hexraw", "s")': (str) => str == input,
+-  });
+-}
+diff --git a/test/greeting.test.js b/test/greeting.test.js
+deleted file mode 100644
+index 9de84eb..0000000
+--- a/test/greeting.test.js
++++ /dev/null
+@@ -1,18 +0,0 @@
+-import { check } from "k6";
+-import { greeting } from "k6/x/example";
+-
+-export const options = {
+-  thresholds: {
+-    checks: ["rate==1"],
+-  },
+-};
+-
+-export default function () {
+-  check(greeting(""), {
+-    "greeting()": (str) => str == "Hello, World!",
+-  });
+-
+-  check(greeting("Joe"), {
+-    "greeting('Joe')": (str) => str == "Hello, Joe!",
+-  });
+-}
+diff --git a/test/random.test.js b/test/random.test.js
+deleted file mode 100644
+index 87bfd95..0000000
+--- a/test/random.test.js
++++ /dev/null
+@@ -1,52 +0,0 @@
+-import { check } from "k6";
+-import { Random } from "k6/x/example";
+-
+-export const options = {
+-  thresholds: {
+-    checks: ["rate==1"],
+-  },
+-}
+-
+-export default function () {
+-  const seed = 42
+-
+-  // without seed
+-
+-  let rnd = new Random()
+-
+-  check(rnd, {
+-    "new Random()": (rnd) => rnd.seed != 0
+-  })
+-
+-  check(rnd, {
+-    "rnd.int() before seed change": (rnd) => rnd.int() != 8836438174961104
+-  })
+-
+-  rnd.seed = seed
+-
+-  check(rnd, {
+-    "rnd.int() after seed change": (rnd) => rnd.int() == 8836438174961104
+-  })
+-
+-  // with seed
+-
+-  check(new Random(seed), {
+-    "new Random(seed)": (rnd) => rnd.seed == 42
+-  })
+-
+-  check(new Random(seed), {
+-    "int()": (rnd) => rnd.int() == 8836438174961104
+-  })
+-
+-  check(new Random(seed), {
+-    "int(n)": (rnd) => rnd.int(2000) == 675
+-  })
+-
+-  check(new Random(seed), {
+-    "float()": (rnd) => Math.round(rnd.float() * 100) == 37
+-  })
+-
+-  check(new Random(seed), {
+-    "float(n)": (rnd) => Math.round(rnd.float(2000)) == 746
+-  })
+-}
+diff --git a/test/smoke.test.js b/test/smoke.test.js
+index 1c800e1..89c6c24 100644
+--- a/test/smoke.test.js
++++ b/test/smoke.test.js
+@@ -1,6 +1,5 @@
+-import greeting from "./greeting.test.js"
+-import base32 from "./base32.test.js"
+-import random from "./random.test.js"
++import example from "k6/x/example"
++import { check } from "k6"
+ 
+ export const options = {
+   thresholds: {
+@@ -9,7 +8,6 @@ export const options = {
+ }
+ 
+ export default function () {
+-  greeting()
+-  base32()
+-  random()
++  // Put your smoke test code here
++  // Use check() to validate the results
+ }
