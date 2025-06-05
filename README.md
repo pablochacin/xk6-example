@@ -14,7 +14,7 @@ export default function () {
 }
 ```
 
-For detailed information, refer to the [k6 Extension Development Quick Start Guide](https://github.com/grafana/xk6/wiki/Quick-Start-Guide) and the [k6 Extension Development Tutorial](https://github.com/grafana/xk6/wiki/Tutorial).
+For detailed information, refer to the [k6 extension development quick start guide](https://github.com/grafana/xk6/wiki/k6-extension-development-quick-start-guide) and the [k6 extension development tutorial](https://github.com/grafana/xk6/wiki/k6-extension-development-tutorial).
 
 ## Download
 
