@@ -1,6 +1,8 @@
 module github.com/grafana/xk6-example
 
-go 1.24.4
+go 1.24.0
+
+toolchain go1.24.4
 
 require (
 	github.com/grafana/sobek v0.0.0-20250320150027-203dc85b6d98
