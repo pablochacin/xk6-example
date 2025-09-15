@@ -6,7 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/grafana/sobek v0.0.0-20250320150027-203dc85b6d98
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.k6.io/k6 v1.1.0
 )
 
