@@ -2,8 +2,6 @@ module github.com/grafana/xk6-example
 
 go 1.24.0
 
-toolchain go1.24.4
-
 require (
 	github.com/grafana/sobek v0.0.0-20250723111835-dd8a13f0d439
 	github.com/stretchr/testify v1.11.1
