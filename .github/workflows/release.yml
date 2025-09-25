@@ -33,7 +33,7 @@ jobs:
           repositories: k6-extension-registry  # Grant access to target repo
 
       - name: Register version in k6 extension registry
-        uses: pablochacin/k6-extension-registry/actions/register-version@add-update-version-action
+        uses: pablochacin/k6-extension-registry/actions/register-version@main
         with:
           module: github.com/pablochacin/xk6-example
           version: ${{ github.ref_name }}
