@@ -1,4 +1,4 @@
-module github.com/grafana/xk6-example
+module github.com/pablochacin/xk6-example
 
 go 1.24.0
 
