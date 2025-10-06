@@ -22,13 +22,9 @@ jobs:
   register-version:
     name: Register Version
     needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Register version in k6 extension registry
-        uses: pablochacin/k6-extension-registry/actions/register-version@main
-        with:
-          token: $${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_CLIENT_SECRET }}
-          module: github.com/pablochacin/xk6-example
-          version: ${{ github.ref_name }}
-          repository-url: ${{ github.server_url }}/${{ github.repository }}
-          release-url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+    uses: pablochacin/k6-extension-registry/.github/workflows/update-registry.yml@main
+    with:
+      module: github.com/pablochacin/xk6-example
+      version: ${{ github.ref_name }}
+      repository-url: ${{ github.server_url }}/${{ github.repository }}
+      release-url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
