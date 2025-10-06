@@ -24,17 +24,11 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Generate GitHub App Token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_ID }}
-          private-key: ${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_PEM }}
-          repositories: k6-extension-registry  # Grant access to target repo
-
       - name: Register version in k6 extension registry
         uses: pablochacin/k6-extension-registry/actions/register-version@main
         with:
+          token: $${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_CLIENT_SECRET }}
           module: github.com/pablochacin/xk6-example
           version: ${{ github.ref_name }}
-          token: ${{ steps.app-token.outputs.token }}
+          repository-url: ${{ github.server_url }}/${{ github.repository }}
+          release-url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
