@@ -31,3 +31,4 @@ jobs:
       version: ${{ github.ref_name }}
       repository-url: ${{ github.server_url }}/${{ github.repository }}
       release-url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+    secrets: inherit
