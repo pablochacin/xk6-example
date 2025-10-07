@@ -29,4 +29,6 @@ jobs:
     with:
       module: github.com/pablochacin/xk6-example
       version: ${{ github.ref_name }}
-    secrets: inherit
+    secrets:
+        app_id: ${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_ID }}
+        app_pem: ${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_PEM }}
