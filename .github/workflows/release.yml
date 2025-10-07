@@ -29,6 +29,4 @@ jobs:
     with:
       module: github.com/pablochacin/xk6-example
       version: ${{ github.ref_name }}
-      repository-url: ${{ github.server_url }}/${{ github.repository }}
-      release-url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
     secrets: inherit
