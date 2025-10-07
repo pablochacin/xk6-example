@@ -25,7 +25,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: pablochacin/k6-extension-registry/.github/workflows/update-registry.yml@main
+    uses: pablochacin/k6-extension-registry/.github/workflows/register-version.yml@main
     with:
       module: github.com/pablochacin/xk6-example
       version: ${{ github.ref_name }}
