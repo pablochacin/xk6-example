@@ -32,3 +32,17 @@ jobs:
     secrets:
         app_id: ${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_ID }}
         app_pem: ${{ secrets.K6_EXTENSION_REGISTRY_UPDATER_PEM }}
+
+  # check the status of the register version workflow
+  check-status:
+    name: check register version status
+    runs-on: ubuntu-latest
+    needs: register-version
+    if: always()
+    steps:
+      - name: Verify job passed
+        run: |
+          if [ "${{ needs.register-version.result }}" != "success" ]; then
+            echo "register-version job failed with status: ${{ needs.register-version.result }}"
+            exit 1
+          fi
